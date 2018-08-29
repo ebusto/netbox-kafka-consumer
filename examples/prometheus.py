@@ -44,9 +44,6 @@ class PrometheusConfig(object):
 
 			fh.flush()
 
-		# Ugly, but functional.
-		os.system('pkill -HUP prometheus')
-	
 	def update_scrape_job(self, operation, service, hostname):
 		print('update_scrape_job: op = {}, service = {}, host = {}'.format(
 			operation, service, hostname
