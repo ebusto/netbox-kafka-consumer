@@ -1,0 +1,18 @@
+global:
+  evaluation_interval: 15s
+  scrape_interval: 15s
+
+scrape_configs:
+- job_name: test
+  static_configs:
+    targets:
+    - dc2-sim-j23-166.nvidia.com:9090
+    - dc2-sim-j23-170.nvidia.com:9090
+- job_name: itml-web-farm-prd
+  static_configs:
+    targets:
+    - sc-it-netbox-dev-01.nvidia.com:9090
+- job_name: farm
+  static_configs:
+    targets:
+    - dc7-sim-a09-013.nvidia.com:9090
