@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 
 sys.path.insert(0, '..')
@@ -13,7 +14,7 @@ class PrometheusConfig(object):
 
 		self.client = netbox_events.Client(
 			group   = 'prometheus-config-sync',
-			servers = netbox_events.KAFKA_DEV,
+			servers = netbox_events.SERVERS_DEV,
 		)
 		
 	def event_service_device(self, event):
@@ -31,49 +32,51 @@ class PrometheusConfig(object):
 		)
 	
 	def update_config(self, fn):
+		# This should acquire a lock first.
 		with open(self.config, 'r') as fh:
 			data = ruamel.yaml.round_trip_load(fh)
 	
 		fn(data)
 	
+		# This should write to a temporary file, then rename.
 		with open(self.config, 'w') as fh:
 			ruamel.yaml.round_trip_dump(data, fh)
+
+			fh.flush()
+
+		# Ugly, but functional.
+		os.system('pkill -HUP prometheus')
 	
 	def update_scrape_job(self, operation, service, hostname):
 		hostname = hostname + ':9090'
 	
 		def fn(data):
-			for job in data['scrape_configs']:
-				if job['job_name'] == service:
-					print('Found existing job: %s' % service)
-
-					targets = set()
-
-					if job['static_configs']['targets']:
-						targets.update(set(job['static_configs']['targets']))
-	
-					if operation == 'create':
-						targets.add(hostname)
-
-					if operation == 'delete':
-						targets.discard(hostname)
-
-					job['static_configs']['targets'] = list(targets)
-					job['static_configs']['targets'].sort()
-
-					return
-			
-			print('New job: %s' % service)
-	
 			job = {
 				'job_name': service,
-				'static_configs': {
-					'targets': [hostname],
-				},
+				'static_configs': [{ 'targets': [] }],  
 			}
-	
-			data['scrape_configs'].append(job)
-	
+
+			for j in data['scrape_configs']:
+				if j['job_name'] == service:
+					job = j
+
+					break
+			else:
+				data['scrape_configs'].append(job)
+
+			targets = set(job['static_configs'][0]['targets'])
+
+			if operation == 'create':
+				targets.add(hostname)
+
+			if operation == 'delete':
+				targets.discard(hostname)
+
+			targets = list(targets)
+			targets.sort()
+
+			job['static_configs'][0]['targets'] = targets
+
 		return self.update_config(fn)
 
 	def run(self):
