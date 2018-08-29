@@ -50,7 +50,7 @@ class Client(object):
 
 				continue
 		
-		    # Extract the payload, then unmarshal from JSON.
+			# Extract the payload, then unmarshal from JSON.
 			event = json.loads(message.value().decode('utf-8'))
 	
 			# Is there a callback for this class?
@@ -59,7 +59,7 @@ class Client(object):
 					self.classes[event['class']](event)
 				except Exception as e:
 					self.error(e)
-				finally:
+				else:
 					consumer.commit(message)
 	
 		consumer.close()
