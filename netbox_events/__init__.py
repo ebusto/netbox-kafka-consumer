@@ -5,10 +5,10 @@ import logging
 import uuid
 
 # Development and production Kafka servers.
-KAFKA_DEV = ['sc-it-mq-dev-01', 'sc-it-mq-dev-02', 'sc-it-mq-dev-03']
-KAFKA_PRD = ['sc-it-mq-prd-01', 'sc-it-mq-prd-02', 'sc-it-mq-prd-03']
+SERVERS_DEV = ['sc-it-mq-dev-01', 'sc-it-mq-dev-02', 'sc-it-mq-dev-03']
+SERVERS_PRD = ['sc-it-mq-prd-01', 'sc-it-mq-prd-02', 'sc-it-mq-prd-03']
 
-DEFAULT_SERVERS = KAFKA_PRD
+DEFAULT_SERVERS = SERVERS_PRD
 
 # Most Kafka errors are warnings, so simply display them.
 DEFAULT_ERROR = lambda error: logging.getLogger(__name__).warning(error)
