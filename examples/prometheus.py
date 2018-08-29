@@ -52,7 +52,7 @@ class PrometheusConfig(object):
 			operation, service, hostname
 		))
 
-		hostname = hostname + ':9090'
+		hostname = hostname + ':9100'
 	
 		def fn(data):
 			job = {
