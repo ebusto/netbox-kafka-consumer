@@ -7,6 +7,7 @@ import warnings
 
 from pynetbox.lib.response import Record
 
+# Silence useless urllib3 warnings.
 warnings.simplefilter("ignore")
 
 # Development and production Kafka servers.
@@ -71,11 +72,11 @@ class Client(object):
 			# Build the NetBox API arguments.
 			api = { 'ssl_verify': False, 'token': self.token }
 
-			# Build the pynetbox record.
-			record = Record(data['model'], api_kwargs=api)
+			# Build the pynetbox record from the model.
+			model = Record(data['model'], api_kwargs=api)
 	
 			try:
-				fn(data, record)
+				fn(data, model)
 			except Exception as e:
 				print(e)
 			else:

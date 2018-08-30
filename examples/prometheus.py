@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import os
 import sys
@@ -15,21 +15,14 @@ class PrometheusConfig(object):
 		self.client = netbox_events.Client(
 			group   = 'prometheus-config-sync',
 			servers = netbox_events.SERVERS_DEV,
+			token   = '2a699ea0f9195ad345088059c5c6ca748af7563e',
 		)
 		
-	def event_service_device(self, event):
-		return self.update_scrape_job(
-			event['event'],
-			event['model']['service']['name'],
-			event['model']['device']['name'],
-		)
+	def event_service_device(self, event, model):
+		return self.update_job(event['event'], model.service, model.device)
 	
-	def event_service_vm(self, event):
-		return self.update_scrape_job(
-			event['event'],
-			event['model']['service']['name'],
-			event['model']['virtual_machine']['name'],
-		)
+	def event_service_vm(self, event, model):
+		return self.update_job(event['event'], model.service, model.virtual_machine)
 	
 	def update_config(self, fn):
 		# This should acquire a lock first.
@@ -44,21 +37,24 @@ class PrometheusConfig(object):
 
 			fh.flush()
 
-	def update_scrape_job(self, operation, service, hostname):
-		print('update_scrape_job: op = {}, service = {}, host = {}'.format(
-			operation, service, hostname
+	def update_job(self, operation, service, host):
+		print('update_job: operation = {}, service = {}, host = {}'.format(
+			operation, service, host
 		))
 
-		hostname = hostname + ':9100'
+		# node_exporter port is 9100.
+		hostname = host.name + ':9100'
 	
 		def fn(data):
 			job = {
-				'job_name': service,
-				'static_configs': [{ 'targets': [] }],  
-			}
+				'job_name': service.name,
+				'static_configs': [
+					{ 'labels':  {} },
+					{ 'targets': [] },
+			]}
 
 			for j in data['scrape_configs']:
-				if j['job_name'] == service:
+				if j['job_name'] == service.name:
 					job = j
 
 					break
@@ -86,8 +82,9 @@ class PrometheusConfig(object):
 
 		self.client.poll()
 
-if len(sys.argv) < 2:
-	print('Usage: %s <config.yml>' % sys.argv[0])
-	sys.exit(1)
+config = '/var/lib/prometheus/prometheus.yml'
 
-PrometheusConfig(sys.argv[1]).run()
+if len(sys.argv) > 1:
+	config = sys.argv[1]
+
+PrometheusConfig(config).run()
