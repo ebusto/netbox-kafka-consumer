@@ -1,11 +1,10 @@
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka       import Consumer, KafkaError
+from pynetbox.lib.response import Record
 
 import json
 import logging
 import uuid
 import warnings
-
-from pynetbox.lib.response import Record
 
 # Silence useless urllib3 warnings.
 warnings.simplefilter("ignore")
