@@ -36,7 +36,7 @@ class Client(object):
 		self.token   = kwargs.get('token',   DEFAULT_TOKEN)
 
 	def ignore(self, *args):
-		print(args)
+		pass
 
 	def poll(self, interval=1.0):
 		self.servers = ','.join(self.servers)
