@@ -19,10 +19,28 @@ class PrometheusConfig(object):
 		)
 		
 	def event_service_device(self, event, model):
-		return self.update_job(event['event'], model.service, model.device)
+		labels = {
+			'manufacturer': model.device.device_type.manufacturer.name,
+			'model':        model.device.device_type.model,
+			'platform':     model.device.platform.name,
+			'site':         model.device.site.name,
+		}
+
+		if model.device.rack:
+			labels.update({
+				'position': model.device.position,
+				'rack':     model.device.rack.name,
+			})
+
+		return self.update_job(event['event'], model.service, model.device, labels)
 	
 	def event_service_vm(self, event, model):
-		return self.update_job(event['event'], model.service, model.virtual_machine)
+		labels = {
+			'cluster': model.virtual_machine.cluster.name,
+			'site':    model.virtual_machine.cluster.site.name,
+		}
+
+		return self.update_job(event['event'], model.service, model.virtual_machine, labels)
 	
 	def update_config(self, fn):
 		# This should acquire a lock first.
@@ -37,7 +55,7 @@ class PrometheusConfig(object):
 
 			fh.flush()
 
-	def update_job(self, operation, service, host):
+	def update_job(self, operation, service, host, labels):
 		print('update_job: operation = {}, service = {}, host = {}'.format(
 			operation, service, host
 		))
@@ -46,33 +64,26 @@ class PrometheusConfig(object):
 		hostname = host.name + ':9100'
 	
 		def fn(data):
-			job = {
-				'job_name': service.name,
-				'static_configs': [
-					{ 'labels':  {} },
-					{ 'targets': [] },
-			]}
+			job = { 'job_name': service.name, 'static_configs': [] }
 
-			for j in data['scrape_configs']:
-				if j['job_name'] == service.name:
-					job = j
-
+			# Existing job for this service?
+			for item in data['scrape_configs']:
+				if item['job_name'] == service.name:
+					job = item
 					break
 			else:
 				data['scrape_configs'].append(job)
 
-			targets = set(job['static_configs'][0]['targets'])
+			# Existing config for this target?
+			for i, static in enumerate(job['static_configs']):
+				if hostname in static['targets']:
+					del job['static_configs'][i]
 
 			if operation == 'create':
-				targets.add(hostname)
-
-			if operation == 'delete':
-				targets.discard(hostname)
-
-			targets = list(targets)
-			targets.sort()
-
-			job['static_configs'][0]['targets'] = targets
+				job['static_configs'].append({
+					'labels':  labels,
+					'targets': [hostname],
+				})
 
 		return self.update_config(fn)
 
