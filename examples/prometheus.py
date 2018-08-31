@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -17,31 +17,52 @@ class PrometheusConfig(object):
 			servers = netbox_events.SERVERS_DEV,
 			token   = '2a699ea0f9195ad345088059c5c6ca748af7563e',
 		)
-		
+
 	def event_service_device(self, event, model):
+		labels = None
+
+		if event['event'] == 'create':
+			labels = self.labels_for_device(model.device)
+
+		self.update_jobs(event['event'], model.service, model.device, labels)
+
+	def event_service_vm(self, event, model):
+		labels = None
+
+		if event['event'] == 'create':
+			labels = self.labels_for_vm(model.virtual_machine)
+
+		self.update_jobs(event['event'], model.service, model.virtual_machine, labels)
+
+	def labels_for_device(self, device):
 		labels = {
-			'manufacturer': model.device.device_type.manufacturer.name,
-			'model':        model.device.device_type.model,
-			'platform':     model.device.platform.name,
-			'site':         model.device.site.name,
+			'manufacturer': device.device_type.manufacturer.name,
+			'model':        device.device_type.model,
+			'site':         device.site.name,
 		}
 
-		if model.device.rack:
+		if device.platform:
 			labels.update({
-				'position': model.device.position,
-				'rack':     model.device.rack.name,
+				'platform': device.platform.name,
 			})
 
-		return self.update_job(event['event'], model.service, model.device, labels)
-	
-	def event_service_vm(self, event, model):
+		if device.rack:
+			labels.update({
+				'face':     device.face,
+				'position': device.position,
+				'rack':     device.rack.name,
+			})
+
+		return labels
+
+	def labels_for_vm(self, vm):
 		labels = {
-			'cluster': model.virtual_machine.cluster.name,
-			'site':    model.virtual_machine.cluster.site.name,
+			'cluster': vm.cluster.name,
+			'site':    vm.cluster.site.name,
 		}
 
-		return self.update_job(event['event'], model.service, model.virtual_machine, labels)
-	
+		return labels
+
 	def update_config(self, fn):
 		# This should acquire a lock first.
 		with open(self.config, 'r') as fh:
@@ -55,13 +76,28 @@ class PrometheusConfig(object):
 
 			fh.flush()
 
-	def update_job(self, operation, service, host, labels):
-		print('update_job: operation = {}, service = {}, host = {}'.format(
-			operation, service, host
-		))
+	def update_jobs(self, event, service, host, labels):
+		print('{}: {}/{} [{}]'.format(event, service, host, labels))
+
+		if labels:
+			labels.update({
+				'environment': service.environment.label,
+				'importance':  service.importance.label,
+			})
 
 		# node_exporter port is 9100.
-		hostname = host.name + ':9100'
+		target = host.name + ':9100'
+		config = {'labels': labels, 'targets': [target]}
+
+		exporter_ports = {
+			'kafka': ':9308',
+		}
+
+		for application in service.applications:
+			if application['name'] in exporter_ports:
+				port = exporter_ports[application['name']]
+
+				config['targets'].append(host.name + port)
 	
 		def fn(data):
 			job = { 'job_name': service.name, 'static_configs': [] }
@@ -71,23 +107,31 @@ class PrometheusConfig(object):
 				if item['job_name'] == service.name:
 					job = item
 					break
+
+			# Job not found, so create it.
 			else:
 				data['scrape_configs'].append(job)
 
 			# Existing config for this target?
 			for i, static in enumerate(job['static_configs']):
-				if hostname in static['targets']:
-					del job['static_configs'][i]
+				if target in static['targets']:
+					if event == 'create':
+						job['static_configs'][i] = config
 
-			if operation == 'create':
-				job['static_configs'].append({
-					'labels':  labels,
-					'targets': [hostname],
-				})
+					if event == 'delete':
+						job['static_configs'].pop(i)
+
+					break
+
+			# Config containing target not found.
+			else:
+				if event == 'create':
+					job['static_configs'].append(config)
 
 		return self.update_config(fn)
 
 	def run(self):
+		#self.client.subscribe([ 'ServiceApplication'    ], self.event_service_application)
 		self.client.subscribe([ 'ServiceDevice'         ], self.event_service_device)
 		self.client.subscribe([ 'ServiceVirtualMachine' ], self.event_service_vm) 
 
