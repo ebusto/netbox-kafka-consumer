@@ -90,8 +90,9 @@ class PrometheusConfig(object):
 		config = {'labels': labels, 'targets': [target]}
 
 		exporter_ports = {
-			'elasticsearch': ':9108',
-			'kafka':         ':9308',
+			'docker':        ':8080', # cadvisor
+			'elasticsearch': ':9108', # prometheus-elasticsearch-exporter
+			'kafka':         ':9308', # prometheus-kafka-exporter
 		}
 
 		if event == 'create':
