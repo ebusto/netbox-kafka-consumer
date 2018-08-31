@@ -90,14 +90,16 @@ class PrometheusConfig(object):
 		config = {'labels': labels, 'targets': [target]}
 
 		exporter_ports = {
-			'kafka': ':9308',
+			'elasticsearch': ':9108',
+			'kafka':         ':9308',
 		}
 
-		for application in service.applications:
-			if application['name'] in exporter_ports:
-				port = exporter_ports[application['name']]
+		if event == 'create':
+			for application in service.applications:
+				if application['name'] in exporter_ports:
+					port = exporter_ports[application['name']]
 
-				config['targets'].append(host.name + port)
+					config['targets'].append(host.name + port)
 	
 		def fn(data):
 			job = { 'job_name': service.name, 'static_configs': [] }
