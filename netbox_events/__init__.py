@@ -6,8 +6,10 @@ import logging
 import uuid
 import warnings
 
-# Silence useless urllib3 warnings.
+# Silence urllib3 SSL warnings.
 warnings.simplefilter("ignore")
+
+log = logging.getLogger(__name__)
 
 # Development and production Kafka servers.
 SERVERS_DEV = ['sc-it-mq-dev-01', 'sc-it-mq-dev-02', 'sc-it-mq-dev-03']
@@ -16,7 +18,7 @@ SERVERS_PRD = ['sc-it-mq-prd-01', 'sc-it-mq-prd-02', 'sc-it-mq-prd-03']
 DEFAULT_SERVERS = SERVERS_PRD
 
 # Most Kafka errors are warnings, so simply display them.
-DEFAULT_ERROR = lambda e: logging.getLogger(__name__).warning(e)
+DEFAULT_ERROR = lambda e: log.warning(e)
 
 # Kafka consumer group.
 DEFAULT_GROUP = uuid.uuid4().hex
@@ -73,11 +75,11 @@ class Client(object):
 
 			# Build the pynetbox record from the model.
 			model = Record(data['model'], api_kwargs=api)
-	
+
 			try:
 				fn(data, model)
 			except Exception as e:
-				print(e)
+				log.exception(e)
 			else:
 				consumer.commit(message)
 	
