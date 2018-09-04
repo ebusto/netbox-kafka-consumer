@@ -100,14 +100,18 @@ class PrometheusConfig(object):
 				'importance':  service.importance.label,
 			})
 
-		# node_exporter port is 9100.
-		target = host.name + ':9100'
-		config = {'labels': labels, 'targets': [target]}
-
 		exporter_ports = {
 			'docker':        ':8080', # cadvisor
 			'elasticsearch': ':9108', # prometheus-elasticsearch-exporter
 			'kafka':         ':9308', # prometheus-kafka-exporter
+		}
+
+		# node_exporter port is 9100.
+		target = host.name + ':9100'
+
+		config = {
+			'labels':  labels,
+			'targets': [target],
 		}
 
 		if event == 'create':
