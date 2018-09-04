@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 
+import grp
 import os
+import ruamel.yaml
+import stat
 import sys
+import tempfile
 
 sys.path.insert(0, '..')
 
 import netbox_events
-import ruamel.yaml
 
 class PrometheusConfig(object):
-	def __init__(self, config):
+	def __init__(self, config, group):
 		self.config = config
+		self.group  = group
 
 		self.client = netbox_events.Client(
 			group   = 'prometheus-config-sync',
@@ -48,7 +52,6 @@ class PrometheusConfig(object):
 
 		if device.rack:
 			labels.update({
-				'face':     device.face,
 				'position': device.position,
 				'rack':     device.rack.name,
 			})
@@ -69,12 +72,24 @@ class PrometheusConfig(object):
 			data = ruamel.yaml.round_trip_load(fh)
 	
 		fn(data)
-	
-		# This should write to a temporary file, then rename.
-		with open(self.config, 'w') as fh:
+
+		# Create a temporary file in the same directory.
+		tmp = tempfile.mkstemp(dir=os.path.dirname(self.config))[1]
+
+		# Write the updated configuration.
+		with open(tmp, 'w') as fh:
 			ruamel.yaml.round_trip_dump(data, fh)
 
 			fh.flush()
+
+		# Build GID and mode bits.
+		gid = grp.getgrnam(group).gr_gid
+		mod = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
+
+		os.chmod(tmp, mod)
+		os.chown(tmp, -1, gid)
+
+		os.rename(tmp, self.config)
 
 	def update_jobs(self, event, service, host, labels):
 		print('{}: {}/{} [{}]'.format(event, service, host, labels))
@@ -134,15 +149,15 @@ class PrometheusConfig(object):
 		return self.update_config(fn)
 
 	def run(self):
-		#self.client.subscribe([ 'ServiceApplication'    ], self.event_service_application)
 		self.client.subscribe([ 'ServiceDevice'         ], self.event_service_device)
 		self.client.subscribe([ 'ServiceVirtualMachine' ], self.event_service_vm) 
 
 		self.client.poll()
 
 config = '/var/lib/prometheus/prometheus.yml'
+group  = 'prometheus'
 
 if len(sys.argv) > 1:
 	config = sys.argv[1]
 
-PrometheusConfig(config).run()
+PrometheusConfig(config, group).run()
