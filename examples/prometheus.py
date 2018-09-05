@@ -22,21 +22,27 @@ class PrometheusConfig(object):
 			token   = '2a699ea0f9195ad345088059c5c6ca748af7563e',
 		)
 
-	def event_service_device(self, event, model):
+	def event_service_device(self, info, model):
 		labels = None
 
-		if event['event'] == 'create':
+		if info['event'] == 'create':
 			labels = self.labels_for_device(model.device)
 
-		self.update_jobs(event['event'], model.service, model.device, labels)
+		self.update_jobs(info['event'], model.service, model.device, labels)
 
-	def event_service_vm(self, event, model):
+	def event_service_vm(self, info, model):
 		labels = None
 
-		if event['event'] == 'create':
+		if info['event'] == 'create':
 			labels = self.labels_for_vm(model.virtual_machine)
 
-		self.update_jobs(event['event'], model.service, model.virtual_machine, labels)
+		self.update_jobs(info['event'], model.service, model.virtual_machine, labels)
+
+	def event_service_group(self, info, model):
+		print('{}: {}/{} [{}]'.format(info['event'], model.service.name, model.group.name, model.roles))
+
+	def event_service_user(self, info, model):
+		print('{}: {}/{} [{}]'.format(info['event'], model.service.name, model.user.name, model.roles))
 
 	def labels_for_device(self, device):
 		labels = {
@@ -153,8 +159,13 @@ class PrometheusConfig(object):
 		return self.update_config(fn)
 
 	def run(self):
+		# Service and host relationships.
 		self.client.subscribe([ 'ServiceDevice'         ], self.event_service_device)
 		self.client.subscribe([ 'ServiceVirtualMachine' ], self.event_service_vm) 
+
+		# Service and contact relationships.
+		self.client.subscribe([ 'ServiceGroup' ], self.event_service_group)
+		self.client.subscribe([ 'ServiceUser'  ], self.event_service_user)
 
 		self.client.poll()
 
