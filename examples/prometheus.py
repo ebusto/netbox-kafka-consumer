@@ -17,9 +17,9 @@ class PrometheusConfig(object):
 		self.group  = group
 
 		self.client = netbox_events.Client(
-			group   = 'prometheus-config-sync',
-			servers = netbox_events.SERVERS_DEV,
-			token   = '2a699ea0f9195ad345088059c5c6ca748af7563e',
+			'prometheus-config-sync',
+			netbox_events.env.DEV,
+			'2a699ea0f9195ad345088059c5c6ca748af7563e',
 		)
 
 	def event_service_device(self, info, model):
