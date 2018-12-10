@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import grp
 import os
 import ruamel.yaml
 import stat
@@ -11,15 +10,14 @@ sys.path.insert(0, '..')
 
 import netbox_events
 
-class PrometheusConfig(object):
-	def __init__(self, config, group):
+class Prometheus(object):
+	def __init__(self, config, group, token):
 		self.config = config
-		self.group  = group
 
 		self.client = netbox_events.Client(
-			'prometheus-config-sync',
-			netbox_events.env.DEV,
-			'2a699ea0f9195ad345088059c5c6ca748af7563e',
+			group   = group,
+			servers = netbox_events.env.DEV,
+			token   = token,
 		)
 
 	def event_service_device(self, info, model):
@@ -82,18 +80,17 @@ class PrometheusConfig(object):
 		# Create a temporary file in the same directory.
 		tmp = tempfile.mkstemp(dir=os.path.dirname(self.config))[1]
 
+		info = os.stat(self.config)
+
+		# Mirror the source configuration mode and ownership.
+		os.chmod(tmp, info.st_mode)
+		os.chown(tmp, info.st_uid, info.st_gid)
+
 		# Write the updated configuration.
 		with open(tmp, 'w') as fh:
 			ruamel.yaml.round_trip_dump(data, fh)
 
 			fh.flush()
-
-		# Build GID and mode bits.
-		gid = grp.getgrnam(group).gr_gid
-		mod = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
-
-		os.chmod(tmp, mod)
-		os.chown(tmp, -1, gid)
 
 		os.rename(tmp, self.config)
 
@@ -122,8 +119,8 @@ class PrometheusConfig(object):
 
 		if event == 'create':
 			for application in service.applications:
-				if application['name'] in exporter_ports:
-					port = exporter_ports[application['name']]
+				if application.name in exporter_ports:
+					port = exporter_ports[application.name]
 
 					config['targets'].append(host.name + port)
 	
@@ -170,9 +167,10 @@ class PrometheusConfig(object):
 		self.client.poll()
 
 config = '/var/lib/prometheus/prometheus.yml'
-group  = 'prometheus'
+group  = 'prometheus-netbox-sync'
+token  = '2a699ea0f9195ad345088059c5c6ca748af7563e'
 
 if len(sys.argv) > 1:
 	config = sys.argv[1]
 
-PrometheusConfig(config, group).run()
+Prometheus(config, group, token).run()

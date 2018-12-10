@@ -15,22 +15,23 @@ warnings.simplefilter("ignore")
 log = logging.getLogger(__name__)
 
 class Client(object):
-	def __init__(self, group, servers, token):
+	def __init__(self, **kwargs):
 		self.classes = dict()
 
-		self.group = group
-		self.kafka = servers['kafka']
+		self.group   = kwargs['group']
+		self.servers = kwargs['servers']
+		self.token   = kwargs['token']
 
-		self.api = pynetbox.api(servers['netbox'], ssl_verify=False, token=token)
+		self.api = pynetbox.api(self.servers['netbox'], ssl_verify=False, token=self.token)
 
 	def ignore(self, *args):
 		pass
 
 	def poll(self, interval=1.0):
-		self.kafka = ','.join(self.kafka)
+		servers = ','.join(self.servers['kafka'])
 
 		consumer = Consumer({
-			'bootstrap.servers':  self.kafka,
+			'bootstrap.servers':  servers,
 			'group.id':           self.group,
 			'enable.auto.commit': False,
 		})
