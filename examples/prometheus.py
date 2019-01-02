@@ -168,7 +168,7 @@ class Prometheus(object):
 
 config = '/var/lib/prometheus/prometheus.yml'
 group  = 'prometheus-netbox-sync'
-token  = '2a699ea0f9195ad345088059c5c6ca748af7563e'
+token  = '<token>'
 
 if len(sys.argv) > 1:
 	config = sys.argv[1]
