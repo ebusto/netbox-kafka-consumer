@@ -1,6 +1,7 @@
 from confluent_kafka        import Consumer, KafkaError
 from pynetbox.core.response import Record
 
+import confluent_kafka
 import json
 import logging
 import pynetbox
