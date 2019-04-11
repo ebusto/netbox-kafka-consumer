@@ -1,43 +1,30 @@
-from confluent_kafka        import Consumer, KafkaError
-from pynetbox.core.response import Record
-
 import confluent_kafka
+import collections
+import inspect
 import json
 import logging
 import pynetbox
-import uuid
-import warnings
+import pynetbox.core.response
 
-from netbox_events import env
-
-# Silence urllib3 SSL warnings.
-warnings.simplefilter("ignore")
-
-log = logging.getLogger(__name__)
-
-class Client(object):
+class Client:
 	def __init__(self, **kwargs):
-		self.classes = dict()
-
+		self.api     = kwargs['api']
 		self.group   = kwargs['group']
 		self.servers = kwargs['servers']
-		self.token   = kwargs['token']
+		self.topic   = kwargs.get('topic', 'netbox')
 
-		self.api = pynetbox.api(self.servers['netbox'], ssl_verify=False, token=self.token)
+		self.logger = logging.getLogger(__name__)
 
-	def ignore(self, *args):
-		pass
+		self.subscriptions = collections.defaultdict(list)
 
 	def poll(self, interval=1.0):
-		servers = ','.join(self.servers['kafka'])
-
-		consumer = Consumer({
-			'bootstrap.servers':  servers,
+		consumer = confluent_kafka.Consumer({
+			'bootstrap.servers':  self.servers,
 			'group.id':           self.group,
 			'enable.auto.commit': False,
 		})
 
-		consumer.subscribe(['netbox'])
+		consumer.subscribe([self.topic])
 
 		# Listen for messages.
 		while True:
@@ -48,8 +35,8 @@ class Client(object):
 		
 			if message.error():
 				# _PARTITION_EOF = No more messages during this polling cycle.
-				if message.error().code() != KafkaError._PARTITION_EOF:
-					log.error(message.error())
+				if message.error().code() != confluent_kafka.KafkaError._PARTITION_EOF:
+					self.logger.error(message.error())
 
 				continue
 		
@@ -57,21 +44,31 @@ class Client(object):
 			data = message.value().decode('utf-8')
 			data = json.loads(data)
 
-			# Retrieve the callback function, with a default to ignore.
-			fn = self.classes.get(data['class'], self.ignore)
-
 			# Build the pynetbox record from the model.
-			record = Record(data['model'], api=self.api, endpoint=None)
+			record = pynetbox.core.response.Record(data['model'], api=self.api, endpoint=None)
 
-			try:
-				fn(data, record)
-			except Exception as e:
-				log.exception(e)
-			else:
-				consumer.commit(message)
+			# Retrieve the callback functions.
+			for callback in self.callbacks(data):
+				data.update({
+					'record': record,
+					'sender': data['class'],
+				})
+
+				# Build the arguments per the callback's signature.
+				args = dict()
+
+				for name in inspect.signature(callback).parameters:
+					args[name] = data.get(name, None)
+
+				callback(**args)
+
+			consumer.commit(message)
 	
 		consumer.close()
 
-	def subscribe(self, classes, fn):
+	def callbacks(self, data):
+		return self.subscriptions[data['class']]
+
+	def subscribe(self, fn, *classes):
 		for c in classes:
-			self.classes[c] = fn
+			self.subscriptions[c].append(fn)
