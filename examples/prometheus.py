@@ -160,18 +160,18 @@ class Prometheus(object):
 
 	def run(self):
 		# Service and host relationships.
-		self.client.subscribe(self.event_service_device, 'ServiceDevice')
-		self.client.subscribe(self.event_service_vm,     'ServiceVirtualMachine')
+		self.client.subscribe('ServiceDevice',         self.event_service_device)
+		self.client.subscribe('ServiceVirtualMachine', self.event_service_vm)
 
 		# Service and contact relationships.
-		self.client.subscribe(self.event_service_group, 'ServiceGroup')
-		self.client.subscribe(self.event_service_user, 'ServiceUser')
+		self.client.subscribe('ServiceGroup', self.event_service_group)
+		self.client.subscribe('ServiceUser',  self.event_service_user)
 
 		self.client.poll()
 
 config = '/var/lib/prometheus/prometheus.yml'
 group  = 'prometheus-netbox-sync'
-token  = '34249d96ba149f0fbbf280fe2454b81a0dc3fca8'
+token  = '<token>'
 
 if len(sys.argv) > 1:
 	config = sys.argv[1]
