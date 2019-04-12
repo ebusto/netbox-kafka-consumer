@@ -1,8 +1,7 @@
-import confluent_kafka
 import inspect
 import json
-import logging
-import pynetbox
+
+from confluent_kafka import Consumer, KafkaError, KafkaException
 
 from pynetbox.core.response import Record
 
@@ -14,38 +13,31 @@ class Client:
 		self.api   = kwargs.get('api')
 		self.topic = kwargs.get('topic', 'netbox')
 
-		self.logger = logging.getLogger(__name__)
-
 		self.subscriptions = []
 
-	def poll(self, interval=1.0):
-		consumer = confluent_kafka.Consumer({
-			'bootstrap.servers':  self.servers,
-			'group.id':           self.group,
-			'enable.auto.commit': False,
+	def poll(self):
+		consumer = Consumer({
+			'bootstrap.servers':    self.servers,
+			'group.id':             self.group,
+			'enable.auto.commit':   False,
+			'enable.partition.eof': False,
 		})
 
 		consumer.subscribe([self.topic])
 
 		# Listen for messages.
 		while True:
-			message = consumer.poll(interval)
-		
-			if message is None:
-				continue
+			message = consumer.poll()
 		
 			if message.error():
-				# _PARTITION_EOF = No more messages during this polling cycle.
-				if message.error().code() != confluent_kafka.KafkaError._PARTITION_EOF:
-					self.logger.error(message.error())
-
-				continue
+				raise KafkaException(message.error())
 		
 			# Decode the payload.
 			data = json.loads(message.value().decode('utf-8'))
 
-			# All possible parameters.
+			# Build parameters. Start with a copy to avoid circular references.
 			params = data.copy()
+
 			params.update({
 				'message': data,
 				'sender':  data['class'],
