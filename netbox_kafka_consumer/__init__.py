@@ -1,17 +1,18 @@
 import confluent_kafka
-import collections
 import inspect
 import json
 import logging
 import pynetbox
-import pynetbox.core.response
+
+from pynetbox.core.response import Record
 
 class Client:
 	def __init__(self, **kwargs):
-		self.api     = kwargs['api']
 		self.group   = kwargs['group']
 		self.servers = kwargs['servers']
-		self.topic   = kwargs.get('topic', 'netbox')
+
+		self.api   = kwargs.get('api')
+		self.topic = kwargs.get('topic', 'netbox')
 
 		self.logger = logging.getLogger(__name__)
 
@@ -40,22 +41,29 @@ class Client:
 
 				continue
 		
-			# Extract the payload, then unmarshal from JSON.
+			# Decode the payload.
 			data = json.loads(message.value().decode('utf-8'))
 
+			# All possible parameters.
+			params = data.copy()
+			params.update({
+				'message': data,
+				'sender':  data['class'],
+			})
+
 			# Build the pynetbox record from the model.
-			record = pynetbox.core.response.Record(data['model'], self.api, None)
+			if self.api:
+				params['record'] = Record(data['model'], self.api, None)
 
 			# Retrieve the callback functions.
 			for callback in self.callbacks(data):
-				param = {}
-				extra = {'raw': data, 'record': record, 'sender': data['class']}
+				args = []
 
 				# Build arguments according to the callback's signature.
 				for name in inspect.signature(callback).parameters:
-					param[name] = data.get(name, extra.get(name, None))
+					args.append(params.get(name))
 
-				callback(**param)
+				callback(*args)
 
 			consumer.commit(message)
 	
@@ -64,20 +72,20 @@ class Client:
 	def callbacks(self, data):
 		return [cb for (fn,cb) in self.subscriptions if fn(data['class'])]
 
-	def matcher(self, spec):
-		if callable(spec):
-			return lambda v: spec(v)
+	def matcher(self, arg):
+		if callable(arg):
+			return lambda v: arg(v)
 
-		if isinstance(spec, bool):
-			return lambda v: spec
+		if isinstance(arg, bool):
+			return lambda v: arg
 
-		if isinstance(spec, list):
-			return lambda v: v in spec
+		if isinstance(arg, list):
+			return lambda v: v in arg
 
-		if isinstance(spec, str):
-			return lambda v: v == spec
+		if isinstance(arg, str):
+			return lambda v: v == arg
 
-		raise Exception('Unhandled match type: {}'.format(type(match)))
+		raise Exception('Unhandled match type: {}'.format(type(arg)))
 
-	def subscribe(self, spec, cb):
-		self.subscriptions.append((self.matcher(spec), cb))
+	def subscribe(self, arg, cb):
+		self.subscriptions.append((self.matcher(arg), cb))
