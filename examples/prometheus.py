@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import pynetbox
 import ruamel.yaml
 import stat
 import sys
@@ -8,39 +9,41 @@ import tempfile
 
 sys.path.insert(0, '..')
 
-import netbox_events
+import netbox_kafka_consumer
 
 class Prometheus(object):
 	def __init__(self, config, group, token):
+		api = pynetbox.api('https://netbox.nvidia.com', ssl_verify=False, token=token)
+
 		self.config = config
 
-		self.client = netbox_events.Client(
+		self.client = netbox_kafka_consumer.Client(
+			api     = api,
 			group   = group,
-			servers = netbox_events.env.DEV,
-			token   = token,
+			servers = 'sc-it-mq-prd-01,sc-it-mq-prd-02,sc-it-mq-prd-03',
 		)
 
-	def event_service_device(self, info, model):
+	def event_service_device(self, event, record):
 		labels = None
 
-		if info['event'] == 'create':
-			labels = self.labels_for_device(model.device)
+		if event == 'create':
+			labels = self.labels_for_device(record.device)
 
-		self.update_jobs(info['event'], model.service, model.device, labels)
+		self.update_jobs(info['event'], record.service, record.device, labels)
 
-	def event_service_vm(self, info, model):
+	def event_service_vm(self, event, record):
 		labels = None
 
-		if info['event'] == 'create':
-			labels = self.labels_for_vm(model.virtual_machine)
+		if event == 'create':
+			labels = self.labels_for_vm(record.virtual_machine)
 
-		self.update_jobs(info['event'], model.service, model.virtual_machine, labels)
+		self.update_jobs(event, record.service, record.virtual_machine, labels)
 
-	def event_service_group(self, info, model):
-		print('{}: {}/{} [{}]'.format(info['event'], model.service.name, model.group.name, model.roles))
+	def event_service_group(self, event, record):
+		print('[{}] {}/{}: {}'.format(event, record.service.name, record.group.name, record.roles))
 
-	def event_service_user(self, info, model):
-		print('{}: {}/{} [{}]'.format(info['event'], model.service.name, model.user.name, model.roles))
+	def event_service_user(self, event, record):
+		print('[{}] {}/{}: {}'.format(event, record.service.name, record.user.name, record.roles))
 
 	def labels_for_device(self, device):
 		labels = {
@@ -157,18 +160,18 @@ class Prometheus(object):
 
 	def run(self):
 		# Service and host relationships.
-		self.client.subscribe([ 'ServiceDevice'         ], self.event_service_device)
-		self.client.subscribe([ 'ServiceVirtualMachine' ], self.event_service_vm) 
+		self.client.subscribe(self.event_service_device, 'ServiceDevice')
+		self.client.subscribe(self.event_service_vm,     'ServiceVirtualMachine')
 
 		# Service and contact relationships.
-		self.client.subscribe([ 'ServiceGroup' ], self.event_service_group)
-		self.client.subscribe([ 'ServiceUser'  ], self.event_service_user)
+		self.client.subscribe(self.event_service_group, 'ServiceGroup')
+		self.client.subscribe(self.event_service_user, 'ServiceUser')
 
 		self.client.poll()
 
 config = '/var/lib/prometheus/prometheus.yml'
 group  = 'prometheus-netbox-sync'
-token  = '<token>'
+token  = '34249d96ba149f0fbbf280fe2454b81a0dc3fca8'
 
 if len(sys.argv) > 1:
 	config = sys.argv[1]
