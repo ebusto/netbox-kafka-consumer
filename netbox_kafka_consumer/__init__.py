@@ -64,6 +64,14 @@ class Client:
 	def callbacks(self, data):
 		return [cb for (fn,cb) in self.subscriptions if fn(data['class'])]
 
+	def match(self, arg):
+		def decorate(cb):
+			self.subscribe(arg, cb)
+
+			return cb
+
+		return decorate
+
 	def matcher(self, arg):
 		if callable(arg):
 			return lambda v: arg(v)

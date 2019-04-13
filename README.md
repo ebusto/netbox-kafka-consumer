@@ -40,7 +40,6 @@ client = netbox_kafka_consumer.Client(
 #   response - responding hostname
 #   sender   - the record class / sender
 
-# The 'record' parameter is the pynetbox response record.
 def vm_record(record):
     print(record.cluster.site.name)
 
@@ -57,6 +56,12 @@ def user_device(request, event, model, detail):
             request['username'], model.get('name', 'unknown'), detail))
 
 client.subscribe(re.compile('^Device').match, user_device)
+
+# For convenience, a 'match' decorator is provided.
+
+@client.match(['Region', 'Site'])
+def location_event(event, sender, message):
+    print('[{}] {}: {}'.format(...))
 
 client.poll()
 ```
