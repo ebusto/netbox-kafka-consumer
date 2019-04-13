@@ -1,7 +1,6 @@
+import confluent_kafka
 import inspect
 import json
-
-from confluent_kafka import Consumer, KafkaError, KafkaException
 
 from pynetbox.core.response import Record
 
@@ -16,7 +15,7 @@ class Client:
 		self.subscriptions = []
 
 	def poll(self):
-		consumer = Consumer({
+		consumer = confluent_kafka.Consumer({
 			'bootstrap.servers':    self.servers,
 			'group.id':             self.group,
 			'enable.auto.commit':   False,
@@ -30,7 +29,7 @@ class Client:
 			message = consumer.poll()
 		
 			if message.error():
-				raise KafkaException(message.error())
+				raise confluent_kafka.KafkaException(message.error())
 		
 			# Decode the payload.
 			data = json.loads(message.value().decode('utf-8'))
