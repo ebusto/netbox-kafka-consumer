@@ -36,22 +36,22 @@ class Client:
 				raise confluent_kafka.KafkaException(message.error())
 		
 			# Decode the payload.
-			message = json.loads(message.value().decode('utf-8'))
+			values = json.loads(message.value().decode('utf-8'))
 
 			# Build parameters. Start with a copy to avoid circular references.
-			params = message.copy()
+			params = values.copy()
 
 			params.update({
-				'message': message,
-				'sender':  message['class'],
+				'message': values,
+				'sender':  values['class'],
 			})
 
 			# Build the pynetbox record from the model.
 			if self.api:
-				params['record'] = Record(message['model'], self.api, None)
+				params['record'] = Record(values['model'], self.api, None)
 
 			# Retrieve the callback functions.
-			for callback in self.callbacks(message):
+			for callback in self.callbacks(values):
 				args = []
 
 				# Build arguments according to the callback's signature.
