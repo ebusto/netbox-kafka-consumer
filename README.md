@@ -15,53 +15,37 @@ client = netbox_kafka_consumer.Client(
     servers = '<kafka_servers>',
 )
 
-# Subscriptions are matched on the class of record. In Django signal terms,
-# this is generally the signal sender. As "class" is a reserved keyword,
-# "sender" is used instead.
-
-# The first argument to 'subscribe' is the match specification, which can be
-# one of the following types:
-#
-#   boolean  - when true, matches all
-#   callable - should return true on match
-#   list     - a list membership match
-#   string   - a simple string match
-
-# The second argument to 'subscribe' is the callback. The function signature
-# is inspected, and the name of each parameter determines the value of each
-# argument. The following parameter names are allowed:
-#
-#   detail   - in the case of an update, the specific changes
-#   event    - create, update, or delete
-#   message  - the raw message
-#   model    - the serialized instance
-#   record   - the model as a pynetbox response record
-#   request  - username and source address
-#   response - responding hostname
-#   sender   - the record class / sender
-
-def vm_record(record):
-    print(record.cluster.site.name)
-
-client.subscribe('VirtualMachine', vm_record)
-
-def all_messages(message):
-    print(message)
-
-client.subscribe(True, all_messages)
-
-def user_device(request, event, model, detail):
-    if event == 'update':
-        print('user {} updated {}: {}'.format(
-            request['username'], model.get('name', 'unknown'), detail))
-
-client.subscribe(re.compile('^Device').match, user_device)
-
-# For convenience, a 'match' decorator is provided.
-
-@client.match(['Region', 'Site'])
-def location_event(event, sender, message):
-    print('[{}] {}: {}'.format(...))
+@client.match(['Device', 'VirtualMachine'], 'delete')
+def system_delete(record, request):
+    print('System {} has been deleted by {}.'.format(record.name, request['user']))
 
 client.poll()
 ```
+
+# Subscriptions
+Messages are matched by the class of record and type of event. In Django
+signal terms, the class is equivalent to the signal sender. As `class` is a
+reserved keyword, `sender` is used instead.
+
+Callbacks are registered with the client, and the callback is called for each
+matching message. Either the `subscribe` method can be called directly, or
+the `match` decorator may be used.
+
+Filters may be one of the following types:
+  * boolean  - when true, matches all
+  * callable - should return true on match
+  * list     - a list membership match
+  * string   - a simple string match
+
+For each matching callback, the function signature is inspected, and the name
+of each parameter determines the value of each argument. The following parameter
+names are allowed:
+
+  * detail   - in the case of an update, the specific changes
+  * event    - create, update, or delete
+  * message  - the raw message
+  * model    - the serialized instance
+  * record   - the model as a pynetbox response record
+  * request  - username and source address
+  * response - responding hostname
+  * sender   - the record class / sender

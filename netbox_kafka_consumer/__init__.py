@@ -14,6 +14,10 @@ class Client:
 
 		self.subscriptions = []
 
+		# Although the Kafka consumer requires a string, a list is tidier.
+		if isinstance(self.servers, list):
+			self.servers = ','.join(self.servers)
+
 	def poll(self):
 		consumer = confluent_kafka.Consumer({
 			'bootstrap.servers':    self.servers,
@@ -32,22 +36,22 @@ class Client:
 				raise confluent_kafka.KafkaException(message.error())
 		
 			# Decode the payload.
-			data = json.loads(message.value().decode('utf-8'))
+			message = json.loads(message.value().decode('utf-8'))
 
 			# Build parameters. Start with a copy to avoid circular references.
-			params = data.copy()
+			params = message.copy()
 
 			params.update({
-				'message': data,
-				'sender':  data['class'],
+				'message': message,
+				'sender':  message['class'],
 			})
 
 			# Build the pynetbox record from the model.
 			if self.api:
-				params['record'] = Record(data['model'], self.api, None)
+				params['record'] = Record(message['model'], self.api, None)
 
 			# Retrieve the callback functions.
-			for callback in self.callbacks(data):
+			for callback in self.callbacks(message):
 				args = []
 
 				# Build arguments according to the callback's signature.
@@ -60,31 +64,41 @@ class Client:
 	
 		consumer.close()
 
-	def callbacks(self, data):
-		return [cb for (fn,cb) in self.subscriptions if fn(data['class'])]
+	# Returns the callbacks that match the message.
+	def callbacks(self, message):
+		return [cb for (cb, fn) in self.subscriptions if fn(message)]
 
-	def match(self, arg):
+	# Simple decorator for subscribing.
+	def match(self, classes=True, events=True):
 		def decorate(cb):
-			self.subscribe(arg, cb)
+			self.subscribe(cb, classes, events)
 
 			return cb
 
 		return decorate
 
-	def matcher(self, arg):
-		if callable(arg):
-			return lambda v: arg(v)
+	# Returns a matching function for the message key, based on the value type.
+	def matcher(self, key, value):
+		if callable(value):
+			return lambda m: value(m[key])
 
-		if isinstance(arg, bool):
-			return lambda v: arg
+		if isinstance(value, bool):
+			return lambda m: value
 
-		if isinstance(arg, list):
-			return lambda v: v in arg
+		if isinstance(value, list):
+			return lambda m: m[key] in value
 
-		if isinstance(arg, str):
-			return lambda v: v == arg
+		if isinstance(value, str):
+			return lambda m: m[key] == value
 
-		raise Exception('Unhandled match type: {}'.format(type(arg)))
+		raise Exception('Unmatchable: key = {}, value = {}'.format(key, value))
 
-	def subscribe(self, arg, cb):
-		self.subscriptions.append((self.matcher(arg), cb))
+	def subscribe(self, cb, classes=True, events=True):
+		filters = [
+			self.matcher('class', classes),
+			self.matcher('event', events),
+		]
+
+		fn = lambda m: all(map(lambda fn: fn(m), filters))
+
+		self.subscriptions.append((cb, fn))
