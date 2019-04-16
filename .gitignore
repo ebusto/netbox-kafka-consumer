@@ -2,5 +2,8 @@
 *.swp
 .pytest_cache
 __pycache__
-prometheus.yml
+build
+dist
 examples
+netbox_kafka_consumer.egg-info
+prometheus.yml
