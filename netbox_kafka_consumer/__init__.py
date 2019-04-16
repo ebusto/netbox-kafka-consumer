@@ -20,10 +20,11 @@ class Client:
 
 	def poll(self):
 		consumer = confluent_kafka.Consumer({
-			'bootstrap.servers':    self.servers,
-			'group.id':             self.group,
-			'enable.auto.commit':   False,
-			'enable.partition.eof': False,
+			'bootstrap.servers':       self.servers,
+			'group.id':                self.group,
+			'enable.auto.commit':      False,
+			'enable.partition.eof':    False,
+			'socket.keepalive.enable': True,
 		})
 
 		consumer.subscribe([self.topic])
