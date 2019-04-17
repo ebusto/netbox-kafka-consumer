@@ -2,7 +2,10 @@ import confluent_kafka
 import inspect
 import json
 
+from pynetbox.core.endpoint import Endpoint
 from pynetbox.core.response import Record
+
+from urllib.parse import urlparse
 
 class Client:
 	def __init__(self, **kwargs):
@@ -49,7 +52,18 @@ class Client:
 
 			# Build the pynetbox record from the model.
 			if self.api:
-				params['record'] = Record(values['model'], self.api, None)
+				endpoint = None
+
+				# The format of @url is:
+				#   <scheme>://<hostname>:<port>/api/<app>/<endpoint>/<pk>/
+				if '@url' in values:
+					url = urlparse(values['@url'])
+					url = url.path.split('/')
+
+					# ['', 'api', '<app>', '<endpoint>', '<pk>', '']
+					endpoint = Endpoint(self.api, getattr(self.api, url[2]), url[3])
+
+				params['record'] = Record(values['model'], self.api, endpoint)
 
 			# Retrieve the callback functions.
 			for callback in self.callbacks(values):
