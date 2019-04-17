@@ -10,7 +10,7 @@ with open('requirements.txt', 'r') as fh:
 
 setuptools.setup(
     name='netbox-kafka-consumer',
-    version='1.0.1',
+    version='1.0.2',
     author='Eric Busto',
     author_email='ebusto@nvidia.com',
     description='Easily consume NetBox changes from Kafka',
