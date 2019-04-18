@@ -1,11 +1,15 @@
+import atexit
 import confluent_kafka
 import inspect
 import json
 
-from pynetbox.core.endpoint import Endpoint
-from pynetbox.core.response import Record
+import pynetbox.core.endpoint
+import pynetbox.core.response
 
 from urllib.parse import urlparse
+
+class DispatchException(Exception):
+	pass
 
 class Client:
 	def __init__(self, **kwargs):
@@ -32,56 +36,60 @@ class Client:
 
 		consumer.subscribe([self.topic])
 
+		atexit.register(consumer.close)
+
 		# Listen for messages.
 		while True:
-			message = consumer.poll()
+			# Without a timeout, KeyboardInterrupt is ignored.
+			message = consumer.poll(timeout=0.5)
+
+			if not message:
+				continue
 		
 			if message.error():
 				raise confluent_kafka.KafkaException(message.error())
 		
-			# Decode the payload.
-			values = json.loads(message.value().decode('utf-8'))
+			try:
+				self.dispatch(message)
+			except Exception as err:
+				raise DispatchException(err)
+			else:
+				consumer.commit(message)
 
-			# Build parameters. Start with a copy to avoid circular references.
-			params = values.copy()
+	# Returns the callbacks that match the message payload.
+	def callbacks(self, values):
+		return [cb for (cb, fn) in self.subscriptions if fn(values)]
 
-			params.update({
-				'message': values,
-				'sender':  values['class'],
-			})
+	# Calls matching callbacks for the message.
+	def dispatch(self, message):
+		# Decode the payload.
+		values = message.value().decode('utf-8')
+		values = json.loads(values)
 
-			# Build the pynetbox record from the model.
-			if self.api:
-				endpoint = None
+		callbacks = self.callbacks(values)
 
-				# The format of @url is:
-				#   <scheme>://<hostname>:<port>/api/<app>/<endpoint>/<pk>/
-				if '@url' in values:
-					url = urlparse(values['@url'])
-					url = url.path.split('/')
+		# No matching callbacks.
+		if not callbacks:
+			return
 
-					# ['', 'api', '<app>', '<endpoint>', '<pk>', '']
-					endpoint = Endpoint(self.api, getattr(self.api, url[2]), url[3])
+		# Start with a copy to avoid circular references.
+		params = values.copy()
 
-				params['record'] = Record(values['model'], self.api, endpoint)
+		params.update({
+			'message': values,
+			'sender':  values['class'],
+			'record':  self.record(values),
+		})
 
-			# Retrieve the callback functions.
-			for callback in self.callbacks(values):
-				args = []
+		# Call each callback.
+		for cb in callbacks:
+			args = []
 
-				# Build arguments according to the callback's signature.
-				for name in inspect.signature(callback).parameters:
-					args.append(params.get(name))
+			# Build arguments according to the callback's signature.
+			for name in inspect.signature(cb).parameters:
+				args.append(params.get(name))
 
-				callback(*args)
-
-			consumer.commit(message)
-	
-		consumer.close()
-
-	# Returns the callbacks that match the message.
-	def callbacks(self, message):
-		return [cb for (cb, fn) in self.subscriptions if fn(message)]
+			cb(*args)
 
 	# Simple decorator for subscribing.
 	def match(self, classes=True, events=True):
@@ -107,6 +115,28 @@ class Client:
 			return lambda m: m[key] == value
 
 		raise Exception('Unmatchable: key = {}, value = {}'.format(key, value))
+
+	# Returns a pynetbox record from the payload, if possible.
+	def record(self, values):
+		if not self.api:
+			return None
+
+		end = None
+
+		# The format of @url is: <base_url>/api/<app>/<endpoint>/<pk>/
+		if '@url' in values:
+			url = urlparse(values['@url'])
+			url = url.path.split('/')
+
+			# url: ['', 'api', '<app>', '<endpoint>', '<pk>', '']
+			(app, endpoint) = (url[2], url[3])
+
+			# Is the app registered with pynetbox?
+			if hasattr(self.api, app):
+				app = getattr(self.api, app)
+				end = pynetbox.core.endpoint.Endpoint(self.api, app, endpoint)
+
+		return pynetbox.core.response.Record(values['model'], self.api, end)
 
 	def subscribe(self, cb, classes=True, events=True):
 		filters = [
