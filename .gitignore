@@ -4,6 +4,6 @@
 __pycache__
 build
 dist
-examples
+examples.ORIG
 netbox_kafka_consumer.egg-info
 prometheus.yml
