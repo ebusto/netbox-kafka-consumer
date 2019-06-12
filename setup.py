@@ -12,7 +12,7 @@ packages = [
 
 setuptools.setup(
     name='netbox-kafka-consumer',
-    version='1.0.4',
+    version='1.0.5',
     author='Eric Busto',
     author_email='ebusto@nvidia.com',
     description='Easily consume NetBox changes from Kafka',
@@ -24,6 +24,7 @@ setuptools.setup(
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
+        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
     ],
 )
