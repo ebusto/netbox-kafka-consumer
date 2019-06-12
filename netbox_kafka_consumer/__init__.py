@@ -94,7 +94,7 @@ class Client:
 			args = []
 
 			# Build arguments according to the callback's signature.
-			for name in inspect.signature(cb).parameters:
+			for name in signature(cb).parameters:
 				args.append(params.get(name))
 
 			cb(*args)
