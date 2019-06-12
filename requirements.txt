@@ -1,2 +1,0 @@
-confluent-kafka==1.0.0
-pynetbox==4.0.6

@@ -6,7 +6,7 @@ import json
 import pynetbox.core.endpoint
 import pynetbox.core.response
 
-from urllib.parse import urlparse
+from future.moves.urllib.parse import urlparse
 
 class DispatchException(Exception):
 	pass
