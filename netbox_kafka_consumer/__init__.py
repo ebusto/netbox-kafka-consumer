@@ -2,11 +2,19 @@ import atexit
 import confluent_kafka
 import inspect
 import json
+import sys
 
 import pynetbox.core.endpoint
 import pynetbox.core.response
 
 from future.moves.urllib.parse import urlparse
+
+if (sys.version_info < (3, 0)):
+	import funcsigs
+
+	signature = funcsigs.signature
+else:
+	signature = inspect.signature
 
 class DispatchException(Exception):
 	pass
