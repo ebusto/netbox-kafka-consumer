@@ -33,6 +33,8 @@ the `match` decorator may be used.
 
 Filters may be one of the following types.
 
+| Type       | Description                      |
+| ----       | -----------                      |
 | `bool`     | When `True`, matches everything. |
 | `callable` | Must return `True` on match.     |
 | `list`     | List membership.                 |
@@ -42,6 +44,8 @@ For each matching callback, the function signature is inspected, and the name
 of each parameter determines the value of each argument. The following parameter
 names are supported.
 
+| Name       | Description                                          |
+| ----       | -----------                                          |
 | `detail`   | On `update`, the specific changes, otherwise `None`. |
 | `event`    | One of: `create`, `update`, or `delete`.             |
 | `message`  | Entire message.                                      |
