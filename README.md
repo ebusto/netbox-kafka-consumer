@@ -9,17 +9,17 @@ import pynetbox
 
 api = pynetbox.api('https://netbox', token='<token>')
 
-client = netbox_kafka_consumer.Client(
+bus = netbox_kafka_consumer.Client(
     api     = api,
     group   = '<kafka_consumer_group>',
     servers = '<kafka_servers>',
 )
 
-@client.match(['Device', 'VirtualMachine'], 'delete')
+@bus.match(['Device', 'VirtualMachine'], 'delete')
 def system_delete(record, request):
     print('System {} has been deleted by {}.'.format(record.name, request['user']))
 
-client.poll()
+bus.poll()
 ```
 
 # Subscriptions
@@ -31,21 +31,22 @@ Callbacks are registered with the client, and the callback is called for each
 matching message. Either the `subscribe` method can be called directly, or
 the `match` decorator may be used.
 
-Filters may be one of the following types:
-  * boolean  - when true, matches all
-  * callable - should return true on match
-  * list     - a list membership match
-  * string   - a simple string match
+Filters may be one of the following types.
+
+| `bool`     | When `True`, matches everything. |
+| `callable` | Must return `True` on match.     |
+| `list`     | List membership.                 |
+| `str`      | String comparison.               |
 
 For each matching callback, the function signature is inspected, and the name
 of each parameter determines the value of each argument. The following parameter
-names are allowed:
+names are supported.
 
-  * detail   - in the case of an update, the specific changes
-  * event    - create, update, or delete
-  * message  - the raw message
-  * model    - the serialized instance
-  * record   - the model as a pynetbox response record
-  * request  - username and source address
-  * response - responding hostname
-  * sender   - the record class / sender
+| `detail`   | On `update`, the specific changes, otherwise `None`. |
+| `event`    | One of: `create`, `update`, or `delete`.             |
+| `message`  | Entire message.                                      |
+| `model`    | Most recent instance of the object.                  |
+| `record`   | Model as a `pynetbox` response record.               |
+| `request`  | Username and source address.                         |
+| `response` | Responding hostname.                                 |
+| `sender`   | Record class.                                        |
