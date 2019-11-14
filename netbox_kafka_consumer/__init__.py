@@ -39,7 +39,7 @@ class Client:
 		if isinstance(self.servers, list):
 			self.servers = ','.join(self.servers)
 
-	def poll(self):
+	def poll(self, on_idle=None, timeout=1.0):
 		consumer = confluent_kafka.Consumer({
 			'bootstrap.servers':       self.servers,
 			'group.id':                self.group,
@@ -55,9 +55,13 @@ class Client:
 		# Listen for messages.
 		while True:
 			# Without a timeout, KeyboardInterrupt is ignored.
-			message = consumer.poll(timeout=0.5)
+			message = consumer.poll(timeout=timeout)
 
+			# No message was received before the timeout.
 			if not message:
+				if callable(on_idle):
+					on_idle()
+
 				continue
 		
 			if message.error():
