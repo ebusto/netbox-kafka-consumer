@@ -2,6 +2,7 @@ import atexit
 import confluent_kafka
 import inspect
 import json
+import socket
 import sys
 
 import pynetbox.core.endpoint
@@ -29,7 +30,12 @@ class Client:
 
 		self.subscriptions = []
 
-		# Although the Kafka consumer requires a string, a list is tidier.
+		# Expand the hostname into all IP addresses.
+		# gethostbyname_ex returns a tuple: (hostname, aliases, ip_addresses)
+		if isinstance(self.servers, str):
+			self.servers = socket.gethostbyname_ex(self.servers)[2]
+
+		# The Kafka consumer requires a comma delimited string of brokers.
 		if isinstance(self.servers, list):
 			self.servers = ','.join(self.servers)
 
