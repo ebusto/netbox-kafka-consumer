@@ -8,13 +8,14 @@ import sys
 import pynetbox.core.endpoint
 import pynetbox.core.response
 
-from future.moves.urllib.parse import urlparse
-
 if (sys.version_info < (3, 0)):
+	from future.moves.urllib.parse import urlparse
 	import funcsigs
 
 	signature = funcsigs.signature
 else:
+	from urllib.parse import urlparse
+
 	signature = inspect.signature
 
 class DispatchException(Exception):
