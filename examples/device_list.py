@@ -3,16 +3,12 @@
 import netbox_kafka_consumer
 import pynetbox
 
-nb = pynetbox.api('https://netbox', ssl_verify=False, token='<token>')
+nb = pynetbox.api('https://netbox.nvidia.com', token='<token>')
 
 cn = netbox_kafka_consumer.Client(
 	api     = nb,
 	group   = 'netbox-device-list-demo',
-	servers = [
-		'sc-it-mq-prd-01',
-		'sc-it-mq-prd-02',
-		'sc-it-mq-prd-03',
-	]
+	servers = 'netbox-kafka-prd',
 )
 
 devices = nb.dcim.devices.filter(role='pdu')
@@ -20,7 +16,7 @@ devices = {device.name:device for device in devices}
 
 @cn.match('Device', ['create', 'update', 'delete'])
 def device_event(event, record, detail):
-	if record.role.slug != 'pdu':
+	if record.device_role.slug != 'pdu':
 		return
 
 	# Device created or updated: store the latest record.
