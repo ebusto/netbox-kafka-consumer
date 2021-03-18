@@ -6,7 +6,7 @@ This library is the companion to [netbox-kafka-producer](https://github.com/ebus
 """
 
 packages = [
-	'confluent-kafka==1.6.0',
+	'confluent-kafka==1.5.0',
 	'funcsigs==1.0.2',
 	'future==0.18.2',
 	'pynetbox==5.3.1',
@@ -14,7 +14,7 @@ packages = [
 
 setuptools.setup(
 	name='netbox-kafka-consumer',
-	version='1.0.13',
+	version='1.0.14',
 	author='Eric Busto',
 	author_email='ebusto@nvidia.com',
 	description='Easily consume NetBox changes from Kafka',
