@@ -14,7 +14,7 @@ packages = [
 
 setuptools.setup(
 	name='netbox-kafka-consumer',
-	version='1.0.15',
+	version='1.0.16',
 	author='Eric Busto',
 	author_email='ebusto@nvidia.com',
 	description='Easily consume NetBox changes from Kafka',

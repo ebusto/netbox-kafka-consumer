@@ -9,160 +9,165 @@ import pynetbox.core.endpoint
 import pynetbox.core.response
 
 if (sys.version_info < (3, 0)):
-	from future.moves.urllib.parse import urlparse
-	import funcsigs
+    from future.moves.urllib.parse import urlparse
+    import funcsigs
 
-	signature = funcsigs.signature
+    signature = funcsigs.signature
 else:
-	from urllib.parse import urlparse
+    from urllib.parse import urlparse
 
-	signature = inspect.signature
+    signature = inspect.signature
+
 
 class DispatchException(Exception):
-	pass
+    pass
+
 
 class Client:
-	def __init__(self, **kwargs):
-		self.group   = kwargs['group']
-		self.servers = kwargs['servers']
+    def __init__(self, **kwargs):
+        self.group   = kwargs['group']
+        self.servers = kwargs['servers']
 
-		self.api   = kwargs.get('api')
-		self.topic = kwargs.get('topic', 'netbox')
+        self.api   = kwargs.get('api')
+        self.topic = kwargs.get('topic', 'netbox')
 
-		self.subscriptions = []
+        self.subscriptions = []
 
-		# Expand the hostname into all IP addresses.
-		# gethostbyname_ex returns a tuple: (hostname, aliases, ip_addresses)
-		if isinstance(self.servers, str):
-			self.servers = socket.gethostbyname_ex(self.servers)[2]
+        # Expand the hostname into all IP addresses.
+        # gethostbyname_ex returns a tuple: (hostname, aliases, ip_addresses)
+        if isinstance(self.servers, str):
+            self.servers = socket.gethostbyname_ex(self.servers)[2]
 
-		# The Kafka consumer requires a comma delimited string of brokers.
-		if isinstance(self.servers, list):
-			self.servers = ','.join(self.servers)
+        # The Kafka consumer requires a comma delimited string of brokers.
+        if isinstance(self.servers, list):
+            self.servers = ','.join(self.servers)
 
-	def poll(self, on_idle=None, timeout=1.0):
-		consumer = confluent_kafka.Consumer({
-			'bootstrap.servers':       self.servers,
-			'group.id':                self.group,
-			'enable.auto.commit':      False,
-			'enable.partition.eof':    False,
-			'socket.keepalive.enable': True,
-		})
+    def poll(self, on_error=None, on_idle=None, timeout=1.0):
+        consumer = confluent_kafka.Consumer({
+            'bootstrap.servers':       self.servers,
+            'group.id':                self.group,
+            'enable.auto.commit':      False,
+            'enable.partition.eof':    False,
+            'socket.keepalive.enable': True,
+        })
 
-		consumer.subscribe([self.topic])
+        consumer.subscribe([self.topic])
 
-		atexit.register(consumer.close)
+        atexit.register(consumer.close)
 
-		# Listen for messages.
-		while True:
-			# Without a timeout, KeyboardInterrupt is ignored.
-			message = consumer.poll(timeout=timeout)
+        # Listen for messages.
+        while True:
+            # Without a timeout, KeyboardInterrupt is ignored.
+            message = consumer.poll(timeout=timeout)
 
-			# No message was received before the timeout.
-			if not message:
-				if callable(on_idle):
-					on_idle()
+            # No message was received before the timeout.
+            if not message:
+                if callable(on_idle):
+                    on_idle()
 
-				continue
-		
-			if message.error():
-				raise confluent_kafka.KafkaException(message.error())
-		
-			try:
-				self.dispatch(message)
-			except Exception as err:
-				raise DispatchException(err)
-			else:
-				consumer.commit(message)
+                continue
 
-	# Returns the callbacks that match the message payload.
-	def callbacks(self, values):
-		return [cb for (cb, fn) in self.subscriptions if fn(values)]
+            if message.error():
+                raise confluent_kafka.KafkaException(message.error())
 
-	# Calls matching callbacks for the message.
-	def dispatch(self, message):
-		# Decode the payload.
-		values = message.value().decode('utf-8')
-		values = json.loads(values)
+            try:
+                self.dispatch(message)
+            except Exception as err:
+                if not callable(on_error):
+                    raise DispatchException(err)
 
-		callbacks = self.callbacks(values)
+                on_error(err)
 
-		# No matching callbacks.
-		if not callbacks:
-			return
+            consumer.commit(message)
 
-		# Start with a copy to avoid circular references.
-		params = values.copy()
+    # Returns the callbacks that match the message payload.
+    def callbacks(self, values):
+        return [cb for (cb, fn) in self.subscriptions if fn(values)]
 
-		params.update({
-			'message': values,
-			'sender':  values['class'],
-			'record':  self.record(values),
-		})
+    # Calls matching callbacks for the message.
+    def dispatch(self, message):
+        # Decode the payload.
+        values = message.value().decode('utf-8')
+        values = json.loads(values)
 
-		# Call each callback.
-		for cb in callbacks:
-			args = []
+        callbacks = self.callbacks(values)
 
-			# Build arguments according to the callback's signature.
-			for name in signature(cb).parameters:
-				args.append(params.get(name))
+        # No matching callbacks.
+        if not callbacks:
+            return
 
-			cb(*args)
+        # Start with a copy to avoid circular references.
+        params = values.copy()
 
-	# Simple decorator for subscribing.
-	def match(self, classes=True, events=True):
-		def decorate(cb):
-			self.subscribe(cb, classes, events)
+        params.update({
+            'message': values,
+            'sender':  values['class'],
+            'record':  self.record(values),
+        })
 
-			return cb
+        # Call each callback.
+        for cb in callbacks:
+            args = []
 
-		return decorate
+            # Build arguments according to the callback's signature.
+            for name in signature(cb).parameters:
+                args.append(params.get(name))
 
-	# Returns a matching function for the message key, based on the value type.
-	def matcher(self, key, value):
-		if callable(value):
-			return lambda m: value(m[key])
+            cb(*args)
 
-		if isinstance(value, bool):
-			return lambda m: value
+    # Simple decorator for subscribing.
+    def match(self, classes=True, events=True):
+        def decorate(cb):
+            self.subscribe(cb, classes, events)
 
-		if isinstance(value, list):
-			return lambda m: m[key] in value
+            return cb
 
-		if isinstance(value, str):
-			return lambda m: m[key] == value
+        return decorate
 
-		raise Exception('Unmatchable: key = {}, value = {}'.format(key, value))
+    # Returns a matching function for the message key, based on the value type.
+    def matcher(self, key, value):
+        if callable(value):
+            return lambda m: value(m[key])
 
-	# Returns a pynetbox record from the payload, if possible.
-	def record(self, values):
-		if not self.api:
-			return None
+        if isinstance(value, bool):
+            return lambda m: value
 
-		end = None
+        if isinstance(value, list):
+            return lambda m: m[key] in value
 
-		# The format of @url is: <base_url>/api/<app>/<endpoint>/<pk>/
-		if '@url' in values:
-			url = urlparse(values['@url'])
-			url = url.path.split('/')
+        if isinstance(value, str):
+            return lambda m: m[key] == value
 
-			# url: ['', 'api', '<app>', '<endpoint>', '<pk>', '']
-			(app, endpoint) = (url[2], url[3])
+        raise Exception('Unmatchable: key = {}, value = {}'.format(key, value))
 
-			# Is the app registered with pynetbox?
-			if hasattr(self.api, app):
-				app = getattr(self.api, app)
-				end = pynetbox.core.endpoint.Endpoint(self.api, app, endpoint)
+    # Returns a pynetbox record from the payload, if possible.
+    def record(self, values):
+        if not self.api:
+            return None
 
-		return pynetbox.core.response.Record(values['model'], self.api, end)
+        end = None
 
-	def subscribe(self, cb, classes=True, events=True):
-		filters = [
-			self.matcher('class', classes),
-			self.matcher('event', events),
-		]
+        # The format of @url is: <base_url>/api/<app>/<endpoint>/<pk>/
+        if '@url' in values:
+            url = urlparse(values['@url'])
+            url = url.path.split('/')
 
-		fn = lambda m: all(map(lambda fn: fn(m), filters))
+            # url: ['', 'api', '<app>', '<endpoint>', '<pk>', '']
+            (app, endpoint) = (url[2], url[3])
 
-		self.subscriptions.append((cb, fn))
+            # Is the app registered with pynetbox?
+            if hasattr(self.api, app):
+                app = getattr(self.api, app)
+                end = pynetbox.core.endpoint.Endpoint(self.api, app, endpoint)
+
+        return pynetbox.core.response.Record(values['model'], self.api, end)
+
+    def subscribe(self, cb, classes=True, events=True):
+        filters = [
+            self.matcher('class', classes),
+            self.matcher('event', events),
+        ]
+
+        fn = lambda m: all(map(lambda fn: fn(m), filters))
+
+        self.subscriptions.append((cb, fn))
