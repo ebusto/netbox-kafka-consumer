@@ -9,12 +9,12 @@ packages = [
 	'confluent-kafka==1.5.0',
 	'funcsigs==1.0.2',
 	'future==0.18.2',
-	'pynetbox==5.3.1',
+	'pynetbox==6.6.2',
 ]
 
 setuptools.setup(
 	name='netbox-kafka-consumer',
-	version='1.0.14',
+	version='1.0.15',
 	author='Eric Busto',
 	author_email='ebusto@nvidia.com',
 	description='Easily consume NetBox changes from Kafka',
