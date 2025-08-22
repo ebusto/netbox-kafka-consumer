@@ -8,7 +8,7 @@ This library is the companion to [netbox-kafka-producer](https://github.com/ebus
 packages = [
 	'confluent-kafka==1.5.0',
 	'funcsigs==1.0.2',
-	'future==0.18.2',
+	'future==1.0.0',
 	'pynetbox==6.6.2',
 ]
 
